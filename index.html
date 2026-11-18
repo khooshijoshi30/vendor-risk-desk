@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vendor Risk Desk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: an audit ledger. Summary strip, then the register as a ledger table,
+   then the open vendor file below it with three tabs: Tiering, Questionnaire, Result. */
+:root {
+  --paper: #f3f5f8;
+  --panel: #ffffff;
+  --ink: #16202f;
+  --muted: #5a6577;
+  --line: #d9dee6;
+  --accent: #2650b8;
+  --accent-soft: #e7edfb;
+  --low: #1d7f55;
+  --low-soft: #e2f3ea;
+  --med: #a8670b;
+  --med-soft: #fbefd9;
+  --high: #c2410c;
+  --high-soft: #fde6da;
+  --crit: #a61b1b;
+  --crit-soft: #f9dcdc;
+  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0f141c; --panel: #171e29; --ink: #e6eaf1; --muted: #9aa5b6; --line: #2a3443;
+    --accent: #7ea2ff; --accent-soft: #1d2a48;
+    --low: #4cc58c; --low-soft: #12301f; --med: #e2a64a; --med-soft: #3a2a10;
+    --high: #f0814f; --high-soft: #3d1d10; --crit: #f26b6b; --crit-soft: #3f1515;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0f141c; --panel: #171e29; --ink: #e6eaf1; --muted: #9aa5b6; --line: #2a3443;
+  --accent: #7ea2ff; --accent-soft: #1d2a48;
+  --low: #4cc58c; --low-soft: #12301f; --med: #e2a64a; --med-soft: #3a2a10;
+  --high: #f0814f; --high-soft: #3d1d10; --crit: #f26b6b; --crit-soft: #3f1515;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font: 15px/1.5 var(--font-body);
+}
+.wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px 64px; display: grid; gap: 24px; }
+
+header.top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; border-bottom: 2px solid var(--ink); padding-bottom: 14px; }
+.brand h1 { font: 700 34px/1.05 var(--font-display); letter-spacing: -0.01em; margin: 0; text-wrap: balance; }
+.brand p { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+.brand .file-no { font: 500 12px var(--font-mono); color: var(--accent); letter-spacing: 0.08em; text-transform: uppercase; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+button, .btn {
+  font: 500 14px var(--font-body); color: var(--ink); background: var(--panel);
+  border: 1px solid var(--line); border-radius: 6px; padding: 7px 12px; cursor: pointer;
+}
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+:root[data-theme="dark"] button.primary { color: #0f141c; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) button.primary { color: #0f141c; } }
+button.danger { color: var(--crit); }
+button:focus-visible, select:focus-visible, input:focus-visible, .row:focus-visible, .tab:focus-visible, label.opt:focus-within {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+
+.summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.tile { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; display: grid; gap: 2px; }
+.tile .k { font-size: 13px; color: var(--muted); }
+.tile .v { font: 600 30px/1.1 var(--font-mono); font-variant-numeric: tabular-nums; }
+.tile .s { font-size: 12.5px; color: var(--muted); }
+.tile.alert .v { color: var(--high); }
+
+section.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+.card-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.card-head h2 { font: 600 20px var(--font-display); margin: 0; }
+.card-head .hint { color: var(--muted); font-size: 13px; }
+
+.table-wrap { overflow-x: auto; }
+table.ledger { width: 100%; border-collapse: collapse; min-width: 860px; }
+.ledger th { text-align: left; font: 500 12px var(--font-mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 10px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.ledger td { padding: 11px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.ledger tr.row { cursor: pointer; }
+.ledger tr.row:hover td { background: var(--accent-soft); }
+.ledger tr.row.sel td { background: var(--accent-soft); }
+.ledger tr.row.sel td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.vid { font: 500 13px var(--font-mono); color: var(--muted); }
+.vname { font-weight: 600; }
+.vsvc { font-size: 13px; color: var(--muted); }
+.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+.tier { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 6px; font: 700 15px var(--font-mono); border: 1.5px solid var(--ink); }
+.tier.t1 { background: var(--ink); color: var(--panel); }
+.bar { display: flex; align-items: center; gap: 8px; min-width: 120px; }
+.bar .track { display: block; flex: 1; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.bar .fill { display: block; height: 100%; background: var(--accent); }
+
+.pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font: 600 12.5px var(--font-body); white-space: nowrap; border: 1px solid transparent; }
+.pill.Low { background: var(--low-soft); color: var(--low); border-color: var(--low); }
+.pill.Medium { background: var(--med-soft); color: var(--med); border-color: var(--med); }
+.pill.High { background: var(--high-soft); color: var(--high); border-color: var(--high); }
+.pill.Critical { background: var(--crit-soft); color: var(--crit); border-color: var(--crit); }
+.pill.Pending { background: transparent; color: var(--muted); border-color: var(--line); }
+.flagcount { font: 600 13px var(--font-mono); color: var(--crit); }
+.due { font: 500 13px var(--font-mono); }
+.due.soon { color: var(--high); }
+
+/* Vendor file */
+.file { display: grid; gap: 0; }
+.file-head { display: grid; grid-template-columns: auto 1fr auto; gap: 16px; align-items: center; padding: 18px; border-bottom: 1px solid var(--line); }
+.stamp { width: 64px; height: 64px; border: 2px solid var(--ink); border-radius: 8px; display: grid; place-items: center; text-align: center; line-height: 1; }
+.stamp b { font: 700 30px var(--font-display); display: block; }
+.stamp span { font: 500 10px var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; }
+.stamp.t1 { background: var(--ink); color: var(--panel); }
+.file-title input { font: 700 24px var(--font-display); color: var(--ink); background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 2px 6px; margin-left: -6px; width: 100%; }
+.file-title input:hover, .file-title input:focus { border-color: var(--line); }
+.meta { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-top: 6px; font-size: 13.5px; color: var(--muted); }
+.meta label { display: inline-flex; gap: 6px; align-items: center; }
+.meta input, .meta select { font: 14px var(--font-body); color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
+.verdict { text-align: right; display: grid; gap: 4px; justify-items: end; }
+.verdict .big { font: 600 13px var(--font-mono); color: var(--muted); }
+
+.tabs { display: flex; gap: 4px; padding: 0 18px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+.tab { font: 600 14px var(--font-body); background: none; border: none; border-bottom: 3px solid transparent; border-radius: 0; padding: 12px 10px 9px; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+.tab .n { font: 500 12px var(--font-mono); color: var(--muted); margin-left: 4px; }
+.pane { padding: 20px 18px 24px; }
+.pane[hidden] { display: none; }
+
+.crit-grid { display: grid; gap: 14px; }
+.crit { display: grid; grid-template-columns: 180px 1fr; gap: 12px; align-items: start; }
+.crit .lbl { font-weight: 600; padding-top: 6px; }
+.opts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+label.opt { display: grid; gap: 2px; border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; cursor: pointer; font-size: 13px; color: var(--muted); }
+label.opt input { position: absolute; opacity: 0; pointer-events: none; }
+label.opt b { font: 600 13px var(--font-mono); color: var(--ink); }
+label.opt.on { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
+.tier-out { margin-top: 18px; display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 14px; border: 1px dashed var(--line); border-radius: 8px; }
+.tier-out .num { font-size: 22px; font-weight: 600; }
+.check { display: inline-flex; gap: 8px; align-items: flex-start; font-size: 14px; }
+.check input { margin-top: 3px; accent-color: var(--accent); }
+
+.domain { margin-bottom: 22px; }
+.domain h3 { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font: 600 17px var(--font-display); margin: 0 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+.domain h3 .w { font: 500 12px var(--font-mono); color: var(--muted); }
+.q { display: grid; grid-template-columns: 52px 1fr 300px; gap: 12px; padding: 10px 0; border-bottom: 1px dotted var(--line); align-items: start; }
+.q .qid { font: 600 13px var(--font-mono); color: var(--muted); padding-top: 2px; }
+.q .qid .star { color: var(--accent); }
+.q .ev { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg label { text-align: center; font-size: 12.5px; padding: 6px 4px; cursor: pointer; border-right: 1px solid var(--line); color: var(--muted); }
+.seg label:last-child { border-right: none; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label:focus-within { outline: 2px solid var(--accent); outline-offset: -2px; }
+.seg label.on.s0 { background: var(--crit-soft); color: var(--crit); font-weight: 600; }
+.seg label.on.s1 { background: var(--med-soft); color: var(--med); font-weight: 600; }
+.seg label.on.s2 { background: var(--low-soft); color: var(--low); font-weight: 600; }
+.note { color: var(--muted); font-size: 13.5px; margin: 0 0 14px; }
+.flags { display: grid; gap: 8px; margin-top: 8px; padding: 14px; border: 1px solid var(--crit); border-radius: 8px; background: var(--crit-soft); }
+.flags h3 { margin: 0; font: 600 16px var(--font-display); color: var(--crit); }
+
+.result-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; }
+.result-grid h3 { font: 600 17px var(--font-display); margin: 0 0 10px; }
+.score-line { display: flex; align-items: baseline; gap: 10px; margin-bottom: 14px; }
+.score-line .num { font-size: 44px; font-weight: 600; line-height: 1; }
+.score-line .of { color: var(--muted); font: 500 14px var(--font-mono); }
+.dbars { display: grid; gap: 8px; }
+.dbar { display: grid; grid-template-columns: 130px 1fr 64px; gap: 10px; align-items: center; font-size: 13.5px; }
+.dbar .track { display: block; height: 10px; background: var(--line); border-radius: 5px; overflow: hidden; }
+.dbar .fill { display: block; height: 100%; border-radius: 5px; }
+.dbar .num { font-size: 12.5px; text-align: right; color: var(--muted); }
+
+table.matrix { border-collapse: separate; border-spacing: 4px; width: 100%; }
+.matrix th { font: 500 11.5px var(--font-mono); color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; padding: 4px; }
+.matrix th.rowh { text-align: left; }
+.matrix td { text-align: center; font: 600 12.5px var(--font-body); padding: 10px 4px; border-radius: 6px; opacity: 0.45; }
+.matrix td.Low { background: var(--low-soft); color: var(--low); }
+.matrix td.Medium { background: var(--med-soft); color: var(--med); }
+.matrix td.High { background: var(--high-soft); color: var(--high); }
+.matrix td.Critical { background: var(--crit-soft); color: var(--crit); }
+.matrix td.hit { opacity: 1; outline: 2.5px solid var(--ink); outline-offset: -2px; transform: scale(1.04); }
+.decision { margin-top: 14px; padding: 14px; border-radius: 8px; border-left: 4px solid var(--accent); background: var(--accent-soft); }
+.decision b { display: block; font: 600 16px var(--font-display); }
+.decision span { font-size: 13.5px; color: var(--muted); }
+.remed { margin-top: 24px; }
+.remed ol { margin: 0; padding-left: 22px; display: grid; gap: 8px; }
+.remed li { padding-left: 4px; }
+.remed .tag { font: 600 11.5px var(--font-mono); padding: 1px 6px; border-radius: 4px; margin-right: 6px; }
+.remed .tag.miss { background: var(--crit-soft); color: var(--crit); }
+.remed .tag.part { background: var(--med-soft); color: var(--med); }
+.remed .tag.flag { background: var(--crit); color: #fff; }
+.empty { color: var(--muted); font-style: italic; }
+
+.modal { position: fixed; inset: 0; background: rgba(10, 14, 22, 0.55); display: grid; place-items: center; padding: 16px; z-index: 20; }
+.modal[hidden] { display: none; }
+.modal .box { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; width: min(640px, 100%); padding: 18px; display: grid; gap: 12px; }
+.modal h2 { margin: 0; font: 600 20px var(--font-display); }
+.modal textarea { width: 100%; min-height: 220px; font: 12.5px/1.45 var(--font-mono); color: var(--ink); background: var(--paper); border: 1px solid var(--line); border-radius: 6px; padding: 10px; resize: vertical; }
+.modal .row-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--panel); padding: 8px 14px; border-radius: 6px; font-size: 14px; z-index: 30; }
+.toast[hidden] { display: none; }
+footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); padding-top: 14px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+@media (max-width: 900px) {
+  .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .result-grid { grid-template-columns: 1fr; }
+  .q { grid-template-columns: 44px 1fr; }
+  .q .seg { grid-column: 2; }
+  .crit { grid-template-columns: 1fr; }
+}
+@media (max-width: 520px) {
+  .opts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .file-head { grid-template-columns: auto 1fr; }
+  .verdict { grid-column: 1 / -1; justify-items: start; text-align: left; }
+  .brand h1 { font-size: 28px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+.matrix td, .fill { transition: all 0.25s ease; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <div class="file-no">Third-party risk register</div>
+      <h1>Vendor Risk Desk</h1>
+      <p>Suvidha Finserv Ltd (fictional NBFC) · tier, assess and score vendors against DPDP, RBI and ISO 27001 expectations</p>
+    </div>
+    <div class="actions">
+      <button class="primary" id="addVendor" type="button">Add vendor</button>
+      <button id="exportCsv" type="button">Export register</button>
+      <button id="backupJson" type="button">Backup or restore</button>
+      <button id="resetData" type="button">Reset sample data</button>
+    </div>
+  </header>
+
+  <div class="summary" id="summary" aria-live="polite"></div>
+
+  <section class="card" aria-labelledby="regTitle">
+    <div class="card-head">
+      <h2 id="regTitle">Vendor register</h2>
+      <span class="hint">Highest residual risk first · select a vendor to open its file</span>
+    </div>
+    <div class="table-wrap">
+      <table class="ledger">
+        <thead>
+          <tr>
+            <th>ID</th><th>Vendor</th><th>Tier</th><th>Control score</th><th>Residual risk</th><th>Red flags</th><th>Status</th><th>Next review</th>
+          </tr>
+        </thead>
+        <tbody id="regBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card file" id="file" aria-label="Vendor file"></section>
+
+  <footer>
+    Scoring follows the Suvidha TPRM programme: inherent tier from 5 criteria (0 to 3 each, out of 15), control score from 32 weighted questions across 8 domains, residual risk from tier × control strength, and 4 red flags that force at least High. All vendors, scores and findings are fictional. Data is kept only in this browser; use Backup or restore to move it.
+  </footer>
+</div>
+
+<div class="modal" id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="box">
+    <h2 id="modalTitle">Export</h2>
+    <p class="note" id="modalNote"></p>
+    <label for="modalText" class="sr">Exported data</label>
+    <textarea id="modalText" spellcheck="false"></textarea>
+    <div class="row-actions">
+      <button type="button" id="modalRestore" hidden>Restore from this text</button>
+      <button type="button" id="modalDownload">Download file</button>
+      <button type="button" id="modalCopy">Copy</button>
+      <button type="button" class="primary" id="modalClose">Close</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast" hidden role="status"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------- Methodology ----------
+  var DOMAINS = [
+    { id: "gov", name: "Governance", w: 10 },
+    { id: "dp", name: "Data protection", w: 15 },
+    { id: "acc", name: "Access control", w: 15 },
+    { id: "sec", name: "Data security", w: 15 },
+    { id: "ir", name: "Incident response", w: 15 },
+    { id: "res", name: "Resilience", w: 10 },
+    { id: "sub", name: "Sub-processors", w: 10 },
+    { id: "reg", name: "Regulatory", w: 10 }
+  ];
+
+  var QUESTIONS = [
+    ["1.1", "gov", true, "Do you hold ISO/IEC 27001 certification, a SOC 2 Type II report, or both? What is in scope?", "Certificate with scope statement; latest SOC 2 report"],
+    ["1.2", "gov", false, "Who is accountable for information security and privacy, and how often does your board review them?", "Org chart; board minutes extract"],
+    ["1.3", "gov", false, "When were your security policies last reviewed and approved?", "Policy list with review dates"],
+    ["1.4", "gov", false, "Do staff with access to client data get security and privacy training every year?", "Training records and completion rate"],
+    ["2.1", "dp", true, "Exactly which Suvidha personal data will you process, for what purpose, and for how long?", "Data flow and retention statement"],
+    ["2.2", "dp", true, "Will you process Suvidha data only on documented instructions and never for your own purposes, including model training?", "Signed declaration; DPA draft"],
+    ["2.3", "dp", false, "How do you support Suvidha in answering access, correction and erasure requests?", "Process description and timelines"],
+    ["2.4", "dp", false, "How and when do you delete or return data at the end of processing and at contract end?", "Deletion procedure; sample deletion certificate"],
+    ["3.1", "acc", true, "Is MFA enforced for all access to systems holding Suvidha data?", "Configuration screenshot or policy"],
+    ["3.2", "acc", false, "How are privileged accounts controlled and monitored?", "PAM tool evidence; review records"],
+    ["3.3", "acc", false, "How often are access rights reviewed, and how fast is a leaver's access removed?", "Last two quarterly review records"],
+    ["3.4", "acc", false, "Can any of your staff see Suvidha data in clear text? Who, and why?", "Role list with justification"],
+    ["4.1", "sec", true, "Is Suvidha data encrypted at rest and in transit? Which standards, and who manages the keys?", "Encryption standard; key management procedure"],
+    ["4.2", "sec", true, "Where is Suvidha data stored and processed, including backups and logs? Does any of it leave India?", "Data location statement by system"],
+    ["4.3", "sec", false, "When was your last independent penetration test, and are critical findings fixed?", "Pen test summary and remediation status"],
+    ["4.4", "sec", false, "How do you patch and harden systems, and what is your patch time for critical issues?", "Vulnerability management policy; metrics"],
+    ["5.1", "ir", true, "How quickly will you notify Suvidha of a suspected breach affecting its data?", "Written commitment (target: within 2 hours)"],
+    ["5.2", "ir", false, "Do you have a tested incident response plan? When was it last tested?", "IR plan; last exercise report"],
+    ["5.3", "ir", true, "Do you keep logs for at least 180 days and will you share them for an investigation?", "Logging policy; retention setting"],
+    ["5.4", "ir", false, "Have you had a security incident or personal data breach in the last 3 years? What happened?", "Incident summary and lessons learned"],
+    ["6.1", "res", true, "What are your recovery time and recovery point objectives for the service Suvidha uses?", "BCP and DR plan with RTO and RPO"],
+    ["6.2", "res", false, "When did you last test disaster recovery, and did you meet your RTO?", "DR test report"],
+    ["6.3", "res", false, "Do you have a single point of failure in staff, site or supplier?", "Dependency assessment"],
+    ["6.4", "res", false, "How would Suvidha get its data back and move to another provider if you stopped trading?", "Exit and transition plan"],
+    ["7.1", "sub", true, "List every sub-processor that will touch Suvidha data, with location and purpose.", "Sub-processor register"],
+    ["7.2", "sub", false, "Do your sub-processor contracts carry the same security and privacy terms as ours?", "Template clauses"],
+    ["7.3", "sub", false, "Will you tell Suvidha before adding or changing a sub-processor?", "Written commitment and notice period"],
+    ["7.4", "sub", false, "How do you assess your own vendors' security?", "Your TPRM procedure"],
+    ["8.1", "reg", true, "Will you allow Suvidha, its auditors and RBI to audit and inspect your operations for this service?", "Signed audit-rights clause"],
+    ["8.2", "reg", false, "Can you support CERT-In 6-hour reporting and RBI cyber incident reporting?", "Process description"],
+    ["8.3", "reg", true, "If your service uses AI or automated decisions, how do you test it for accuracy and bias?", "Model documentation; test results"],
+    ["8.4", "reg", false, "Have you faced regulatory action, penalty or litigation about data or security in the last 3 years?", "Declaration"]
+  ].map(function (r) { return { id: r[0], d: r[1], core: r[2], q: r[3], ev: r[4] }; });
+
+  var CRITERIA = [
+    { id: "data", name: "Data sensitivity", opts: ["No personal data", "Internal business data", "Contact details", "KYC, financial or bank data"] },
+    { id: "vol", name: "Volume of people", opts: ["Under 1,000", "1,000 to 1 lakh", "1 lakh to 10 lakh", "Over 10 lakh"] },
+    { id: "crit", name: "Business criticality", opts: ["No impact if it fails", "Minor delay", "Significant disruption", "Lending stops"] },
+    { id: "access", name: "Access", opts: ["None", "Limited or pseudonymised data", "Stores or processes identifiable copies", "Hosts or directly accesses our systems"] },
+    { id: "reg", name: "Regulatory weight", opts: ["Not a regulated activity", "Supports a regulated activity", "Performs part of a regulated activity", "Core regulated function"] }
+  ];
+
+  var FLAGS = [
+    { t: "No written commitment to notify Suvidha of a breach within 2 hours", fix: "Add a 2-hour breach notification clause before data flows" },
+    { t: "Suvidha data stored or processed outside India without approval", fix: "Move all data, backups and logs to India and confirm in writing" },
+    { t: "Refuses audit and inspection rights for Suvidha, its auditors or RBI", fix: "Sign the audit and RBI inspection clause, or do not contract" },
+    { t: "Uses Suvidha data for its own purposes, including AI model training", fix: "Contractually ban any secondary use or model training" }
+  ];
+
+  var STATUSES = ["Approved", "Approved with remediation", "Conditionally approved", "Under assessment", "Exited"];
+  var STRENGTHS = ["Strong", "Adequate", "Weak", "Poor"];
+  var MATRIX = {
+    1: ["Medium", "High", "Critical", "Critical"],
+    2: ["Low", "Medium", "High", "Critical"],
+    3: ["Low", "Low", "Medium", "High"],
+    4: ["Low", "Low", "Low", "Medium"]
+  };
+  var RANK = { Low: 0, Medium: 1, High: 2, Critical: 3 };
+  var DECISION = {
+    Low: ["Approve", "Approver depends on tier"],
+    Medium: ["Approve with a remediation plan and dates", "CISO and DPO approve"],
+    High: ["Approve only with a 90-day remediation plan and documented risk acceptance", "Chief Risk Officer approves"],
+    Critical: ["Reject, or exit the existing relationship", "Vendor Risk Committee decides"]
+  };
+
+  function tierOf(v) {
+    var s = inherent(v);
+    var t = s >= 12 ? 1 : s >= 8 ? 2 : s >= 4 ? 3 : 4;
+    if (v.override && t > 2) t = 2;
+    return t;
+  }
+  function inherent(v) {
+    return CRITERIA.reduce(function (a, c) { return a + (Number(v.crit[c.id]) || 0); }, 0);
+  }
+  function applicable(tier) {
+    if (tier <= 2) return QUESTIONS;
+    if (tier === 3) return QUESTIONS.filter(function (q) { return q.core; });
+    return [];
+  }
+  function domainScores(v, tier) {
+    var qs = applicable(tier);
+    return DOMAINS.map(function (d) {
+      var dq = qs.filter(function (q) { return q.d === d.id; });
+      var earned = dq.reduce(function (a, q) { var x = v.answers[q.id]; return a + (x == null ? 0 : x); }, 0);
+      var possible = dq.length * 2;
+      return { d: d, earned: earned, possible: possible, pct: possible ? earned / possible : 0 };
+    });
+  }
+  function assess(v) {
+    var tier = tierOf(v);
+    var qs = applicable(tier);
+    var answered = qs.filter(function (q) { return v.answers[q.id] != null; }).length;
+    var flagsOn = v.flags.filter(Boolean).length;
+    if (tier === 4) {
+      var r4 = flagsOn ? "High" : "Low";
+      return { tier: tier, inherent: inherent(v), score: null, strength: null, residual: r4, answered: 0, total: 0, flagsOn: flagsOn, domains: domainScores(v, tier), pending: false };
+    }
+    if (answered === 0) {
+      return { tier: tier, inherent: inherent(v), score: null, strength: null, residual: "Pending", answered: 0, total: qs.length, flagsOn: flagsOn, domains: domainScores(v, tier), pending: true };
+    }
+    var ds = domainScores(v, tier);
+    var wsum = ds.reduce(function (a, x) { return a + (x.possible ? x.d.w : 0); }, 0);
+    var score = ds.reduce(function (a, x) { return a + (x.possible ? x.pct * x.d.w : 0); }, 0) / wsum * 100;
+    score = Math.round(score);
+    var si = score >= 80 ? 0 : score >= 60 ? 1 : score >= 40 ? 2 : 3;
+    var residual = MATRIX[tier][si];
+    var forced = false;
+    if (flagsOn && RANK[residual] < RANK.High) { residual = "High"; forced = true; }
+    return { tier: tier, inherent: inherent(v), score: score, strength: STRENGTHS[si], si: si, residual: residual, forced: forced, answered: answered, total: qs.length, flagsOn: flagsOn, domains: ds, pending: false };
+  }
+
+  // ---------- Sample data ----------
+  function answersFromPoints(points) {
+    var ans = {};
+    DOMAINS.forEach(function (d, i) {
+      var p = points[i];
+      QUESTIONS.filter(function (q) { return q.d === d.id; }).forEach(function (q) {
+        var give = Math.min(2, p);
+        ans[q.id] = give;
+        p -= give;
+      });
+    });
+    return ans;
+  }
+  function sample() {
+    function V(id, name, service, owner, crit, override, points, flags, status, next) {
+      return { id: id, name: name, service: service, owner: owner,
+        crit: { data: crit[0], vol: crit[1], crit: crit[2], access: crit[3], reg: crit[4] },
+        override: override, answers: points ? answersFromPoints(points) : {},
+        flags: flags || [false, false, false, false], status: status, next: next };
+    }
+    var list = [
+      V("V01", "Public cloud provider", "Hosts the lending app, loan system and data stores", "CISO", [3, 3, 3, 3, 3], false, [7, 7, 7, 7, 7, 7, 7, 7], null, "Approved", "2027-03"),
+      V("V02", "eKYC and video-KYC vendor", "Identity verification at onboarding", "Head of Lending Ops", [3, 2, 3, 2, 3], false, [6, 6, 6, 6, 5, 5, 6, 6], null, "Conditionally approved", "2027-01"),
+      V("V03", "Bank-statement analysis vendor", "Extracts credit features from bank statements", "Chief Risk Officer", [3, 2, 3, 2, 2], false, [6, 4, 5, 6, 4, 5, 5, 6], [true, true, false, true], "Conditionally approved", "2027-02"),
+      V("V04", "Account Aggregator", "Consent-based sharing of bank data", "Head of Digital", [3, 2, 2, 1, 1], false, [7, 7, 7, 7, 7, 7, 6, 7], null, "Approved", "2028-11"),
+      V("V05", "Credit bureau", "Credit reports and repayment reporting", "Head of Operations", [3, 3, 2, 2, 1], false, [6, 7, 7, 7, 7, 6, 6, 7], null, "Approved", "2028-11"),
+      V("V06", "Payment gateway and NACH bank", "Disbursement and EMI collection", "Head of Operations", [3, 3, 3, 2, 2], false, [7, 6, 6, 7, 6, 7, 7, 7], null, "Approved", "2027-04"),
+      V("V07", "Collection agencies", "Field and phone recovery", "Head of Collections", [3, 1, 1, 2, 3], false, [5, 4, 4, 4, 4, 5, 5, 5], null, "Conditionally approved", "2027-01"),
+      V("V08", "Call-centre vendor", "Customer support and outbound calls", "Head of Customer Service", [2, 2, 1, 3, 1], false, [6, 5, 5, 6, 5, 5, 6, 6], null, "Approved with remediation", "2027-02"),
+      V("V09", "SMS and email gateway", "OTPs, alerts and statements", "Head of Digital", [2, 3, 3, 2, 1], false, [6, 5, 6, 6, 5, 6, 6, 6], null, "Approved with remediation", "2027-03"),
+      V("V10", "HR and payroll SaaS", "Payroll and HR records", "CHRO", [3, 0, 1, 2, 0], false, null, null, "Under assessment", "2026-12")
+    ];
+    return list;
+  }
+
+  // ---------- State ----------
+  var KEY = "vendor-risk-desk-v1";
+  var state = load();
+  var selected = state.vendors.length ? state.vendors[2].id : null;
+  var activeTab = "result";
+
+  function load() {
+    try {
+      var raw = localStorage.getItem(KEY);
+      if (raw) { var s = JSON.parse(raw); if (s && Array.isArray(s.vendors)) return s; }
+    } catch (e) { /* storage unavailable */ }
+    return { vendors: sample() };
+  }
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* ignore */ }
+  }
+  function find(id) { return state.vendors.find(function (v) { return v.id === id; }); }
+
+  // ---------- Helpers ----------
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function monthLabel(ym) {
+    if (!ym) return "Not set";
+    var m = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    var p = ym.split("-");
+    return (m[Number(p[1]) - 1] || "") + " " + p[0];
+  }
+  function dueSoon(ym) {
+    if (!ym) return false;
+    var p = ym.split("-");
+    var due = new Date(Number(p[0]), Number(p[1]) - 1, 1);
+    var days = (due - new Date()) / 864e5;
+    return days < 60;
+  }
+  function toast(msg) {
+    var t = document.getElementById("toast");
+    t.textContent = msg; t.hidden = false;
+    clearTimeout(toast._t); toast._t = setTimeout(function () { t.hidden = true; }, 2200);
+  }
+  function fillColor(pct) {
+    return pct >= 0.8 ? "var(--low)" : pct >= 0.6 ? "var(--accent)" : pct >= 0.4 ? "var(--med)" : "var(--crit)";
+  }
+
+  // ---------- Render: summary + register ----------
+  function renderSummary() {
+    var res = state.vendors.map(assess);
+    var scored = res.filter(function (r) { return r.score != null; });
+    var hi = res.filter(function (r) { return r.residual === "High" || r.residual === "Critical"; }).length;
+    var avg = scored.length ? Math.round(scored.reduce(function (a, r) { return a + r.score; }, 0) / scored.length) : 0;
+    var due = state.vendors.filter(function (v) { return v.status !== "Exited" && dueSoon(v.next); }).length;
+    var t1 = res.filter(function (r) { return r.tier === 1; }).length;
+    document.getElementById("summary").innerHTML =
+      tile("Vendors on the register", state.vendors.length, t1 + " in Tier 1", false) +
+      tile("High or Critical residual risk", hi, "Need CRO or committee decision", hi > 0) +
+      tile("Average control score", scored.length ? avg : "–", "Across " + scored.length + " assessed vendors", false) +
+      tile("Reviews due in 60 days", due, "Including overdue", due > 0);
+  }
+  function tile(k, v, s, alert) {
+    return '<div class="tile' + (alert ? " alert" : "") + '"><span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + '</span><span class="s">' + esc(s) + "</span></div>";
+  }
+  function renderRegister() {
+    var rows = state.vendors.map(function (v) { return { v: v, a: assess(v) }; });
+    var order = { Critical: 0, High: 1, Medium: 2, Low: 3, Pending: 4 };
+    rows.sort(function (x, y) {
+      return (order[x.a.residual] - order[y.a.residual]) || (x.a.tier - y.a.tier) || ((x.a.score || 0) - (y.a.score || 0));
+    });
+    document.getElementById("regBody").innerHTML = rows.map(function (r) {
+      var v = r.v, a = r.a;
+      var scoreCell = a.score == null ? '<span class="empty">Not scored</span>' :
+        '<div class="bar"><span class="num">' + a.score + '</span><span class="track"><span class="fill" style="width:' + a.score + '%;background:' + fillColor(a.score / 100) + '"></span></span></div>';
+      return '<tr class="row' + (v.id === selected ? " sel" : "") + '" tabindex="0" data-id="' + esc(v.id) + '">' +
+        '<td class="vid">' + esc(v.id) + "</td>" +
+        '<td><div class="vname">' + esc(v.name) + '</div><div class="vsvc">' + esc(v.service) + "</div></td>" +
+        '<td><span class="tier' + (a.tier === 1 ? " t1" : "") + '" title="Tier ' + a.tier + '">' + a.tier + "</span></td>" +
+        "<td>" + scoreCell + "</td>" +
+        '<td><span class="pill ' + a.residual + '">' + a.residual + "</span></td>" +
+        "<td>" + (a.flagsOn ? '<span class="flagcount">' + a.flagsOn + "</span>" : '<span class="vsvc">None</span>') + "</td>" +
+        '<td class="vsvc">' + esc(v.status) + "</td>" +
+        '<td><span class="due' + (dueSoon(v.next) && v.status !== "Exited" ? " soon" : "") + '">' + esc(monthLabel(v.next)) + "</span></td>" +
+        "</tr>";
+    }).join("");
+  }
+
+  // ---------- Render: vendor file ----------
+  function renderFile() {
+    var host = document.getElementById("file");
+    var v = find(selected);
+    if (!v) { host.innerHTML = '<div class="pane"><p class="empty">Select a vendor in the register, or add a new one.</p></div>'; return; }
+    var a = assess(v);
+    var qs = applicable(a.tier);
+    host.innerHTML =
+      '<div class="file-head">' +
+        '<div class="stamp' + (a.tier === 1 ? " t1" : "") + '"><div><b>' + a.tier + "</b><span>Tier</span></div></div>" +
+        '<div class="file-title">' +
+          '<label class="sr" for="fName">Vendor name</label><input id="fName" value="' + esc(v.name) + '">' +
+          '<div class="meta">' +
+            '<span class="vid">' + esc(v.id) + "</span>" +
+            '<label for="fService">Service <input id="fService" value="' + esc(v.service) + '" size="38"></label>' +
+            '<label for="fOwner">Owner <input id="fOwner" value="' + esc(v.owner) + '" size="18"></label>' +
+            '<label for="fStatus">Status <select id="fStatus">' + STATUSES.map(function (s) { return "<option" + (s === v.status ? " selected" : "") + ">" + s + "</option>"; }).join("") + "</select></label>" +
+            '<label for="fNext">Next review <input id="fNext" type="month" value="' + esc(v.next || "") + '"></label>' +
+          "</div>" +
+        "</div>" +
+        '<div class="verdict"><span class="pill ' + a.residual + '">' + a.residual + ' residual risk</span><span class="big">' + (a.score == null ? "Not scored" : "Control score " + a.score + "/100") + "</span>" +
+          '<button class="danger" id="delVendor" type="button">Delete vendor</button></div>' +
+      "</div>" +
+      '<div class="tabs" role="tablist" aria-label="Vendor file sections">' +
+        tabBtn("tiering", "1. Tiering", a.inherent + "/15") +
+        tabBtn("questions", "2. Questionnaire", a.total ? a.answered + "/" + a.total : "none") +
+        tabBtn("result", "3. Result", "") +
+      "</div>" +
+      '<div class="pane" id="pane-tiering" role="tabpanel"' + (activeTab === "tiering" ? "" : " hidden") + ">" + tieringPane(v, a) + "</div>" +
+      '<div class="pane" id="pane-questions" role="tabpanel"' + (activeTab === "questions" ? "" : " hidden") + ">" + questionsPane(v, a, qs) + "</div>" +
+      '<div class="pane" id="pane-result" role="tabpanel"' + (activeTab === "result" ? "" : " hidden") + ">" + resultPane(v, a) + "</div>";
+  }
+  function tabBtn(id, label, n) {
+    return '<button class="tab" type="button" role="tab" id="tab-' + id + '" data-tab="' + id + '" aria-selected="' + (activeTab === id) + '">' + label + (n ? '<span class="n">' + n + "</span>" : "") + "</button>";
+  }
+  function tieringPane(v, a) {
+    var tierText = { 1: "Tier 1, Critical", 2: "Tier 2, High", 3: "Tier 3, Medium", 4: "Tier 4, Low" }[a.tier];
+    var need = { 1: "Full questionnaire, evidence, yearly audit and reassessment, Vendor Risk Committee approval", 2: "Full questionnaire, certificates or audit reports, reassessment every 2 years, CISO and DPO approval", 3: "12 core questions, reassessment every 3 years, Vendor Manager approval", 4: "Declaration only, reviewed at renewal" }[a.tier];
+    return '<p class="note">Rate inherent risk before looking at the vendor\'s controls. Each criterion scores 0 to 3.</p>' +
+      '<div class="crit-grid">' + CRITERIA.map(function (c) {
+        return '<div class="crit" role="radiogroup" aria-label="' + esc(c.name) + '"><div class="lbl">' + esc(c.name) + '</div><div class="opts">' +
+          c.opts.map(function (o, i) {
+            var on = Number(v.crit[c.id]) === i;
+            return '<label class="opt' + (on ? " on" : "") + '"><input type="radio" name="crit-' + c.id + '" id="crit-' + c.id + "-" + i + '" value="' + i + '" data-crit="' + c.id + '"' + (on ? " checked" : "") + "><b>" + i + "</b>" + esc(o) + "</label>";
+          }).join("") + "</div></div>";
+      }).join("") + "</div>" +
+      '<div class="tier-out"><span>Inherent score <span class="num">' + a.inherent + '</span>/15</span><span class="pill ' + (a.tier === 1 ? "Critical" : a.tier === 2 ? "High" : a.tier === 3 ? "Medium" : "Low") + '">' + tierText + "</span>" +
+      '<label class="check" for="fOverride"><input type="checkbox" id="fOverride"' + (v.override ? " checked" : "") + "> Holds KYC or financial data of more than 1 lakh people (at least Tier 2)</label></div>" +
+      '<p class="note" style="margin-top:12px">What this tier requires: ' + esc(need) + ".</p>";
+  }
+  function questionsPane(v, a, qs) {
+    var head = a.tier === 4 ? '<p class="note">Tier 4 vendors sign a declaration only; no questionnaire is needed. Red flags still apply.</p>' :
+      '<p class="note">' + (a.tier === 3 ? "Tier 3: only the 12 core questions (★) apply. " : "Tier " + a.tier + ": all 32 questions apply. ") +
+      "Score each answer on its evidence. An answer without evidence counts as not in place.</p>";
+    var body = DOMAINS.map(function (d) {
+      var dq = qs.filter(function (q) { return q.d === d.id; });
+      if (!dq.length) return "";
+      return '<div class="domain"><h3>' + esc(d.name) + '<span class="w">weight ' + d.w + "</span></h3>" + dq.map(function (q) {
+        var cur = v.answers[q.id];
+        var labels = ["Not in place", "Partial", "In place"];
+        return '<div class="q"><div class="qid">' + q.id + (q.core ? ' <span class="star" title="Core question">★</span>' : "") + "</div>" +
+          '<div><div id="qt-' + q.id.replace(".", "-") + '">' + esc(q.q) + '</div><div class="ev">Evidence: ' + esc(q.ev) + "</div></div>" +
+          '<div class="seg" role="radiogroup" aria-labelledby="qt-' + q.id.replace(".", "-") + '">' + [0, 1, 2].map(function (s) {
+            var on = cur === s;
+            return '<label class="s' + s + (on ? " on" : "") + '"><input type="radio" name="q-' + q.id + '" id="q-' + q.id.replace(".", "-") + "-" + s + '" value="' + s + '" data-q="' + q.id + '"' + (on ? " checked" : "") + ">" + labels[s] + "</label>";
+          }).join("") + "</div></div>";
+      }).join("") + "</div>";
+    }).join("");
+    var flags = '<div class="flags"><h3>Red flags: any one forces at least High</h3>' + FLAGS.map(function (f, i) {
+      return '<label class="check" for="flag-' + i + '"><input type="checkbox" id="flag-' + i + '" data-flag="' + i + '"' + (v.flags[i] ? " checked" : "") + "> " + esc(f.t) + "</label>";
+    }).join("") + "</div>";
+    return head + body + flags;
+  }
+  function resultPane(v, a) {
+    if (a.pending) {
+      return '<p class="empty">No answers yet. Complete the questionnaire to calculate the control score and residual risk.</p>' + matrixHtml(a);
+    }
+    var scoreBlock = a.score == null ? '<p class="note">Tier 4: no control score; residual risk is ' + a.residual + (a.flagsOn ? " because a red flag is set." : ".") + "</p>" :
+      '<div class="score-line"><span class="num">' + a.score + '</span><span class="of">/ 100 · ' + a.strength + "</span></div>" +
+      '<div class="dbars">' + a.domains.filter(function (x) { return x.possible; }).sort(function (x, y) { return x.pct - y.pct; }).map(function (x) {
+        return '<div class="dbar"><span>' + esc(x.d.name) + '</span><span class="track"><span class="fill" style="width:' + Math.round(x.pct * 100) + "%;background:" + fillColor(x.pct) + '"></span></span><span class="num">' + x.earned + "/" + x.possible + "</span></div>";
+      }).join("") + "</div>";
+    var dec = DECISION[a.residual];
+    var gaps = [];
+    applicable(a.tier).forEach(function (q) {
+      var x = v.answers[q.id];
+      if (x == null || x < 2) gaps.push({ q: q, x: x == null ? 0 : x, w: DOMAINS.find(function (d) { return d.id === q.d; }).w });
+    });
+    gaps.sort(function (p, q) { return (p.x - q.x) || (q.w - p.w); });
+    var flagItems = FLAGS.map(function (f, i) { return v.flags[i] ? '<li><span class="tag flag">Red flag</span>' + esc(f.fix) + " (before go-live)</li>" : ""; }).join("");
+    var gapItems = gaps.map(function (g) {
+      return '<li><span class="tag ' + (g.x === 0 ? "miss" : "part") + '">' + (g.x === 0 ? "Missing" : "Partial") + "</span>" + g.q.id + " " + esc(g.q.q) + "</li>";
+    }).join("");
+    return '<div class="result-grid">' +
+      "<div><h3>Control strength</h3>" + scoreBlock + "</div>" +
+      "<div><h3>Residual risk</h3>" + matrixHtml(a) +
+        '<div class="decision"><b>' + esc(dec[0]) + "</b><span>" + esc(dec[1]) + (a.forced ? " · raised to High by red flags" : "") + "</span></div></div>" +
+      "</div>" +
+      '<div class="remed"><h3>Remediation list</h3>' +
+      (flagItems || gapItems ? "<ol>" + flagItems + gapItems + "</ol>" : '<p class="empty">No gaps found. Keep monitoring on the tier schedule.</p>') + "</div>";
+  }
+  function matrixHtml(a) {
+    var head = "<tr><th></th>" + STRENGTHS.map(function (s) { return "<th>" + s + "</th>"; }).join("") + "</tr>";
+    var rows = [1, 2, 3, 4].map(function (t) {
+      return '<tr><th class="rowh">Tier ' + t + "</th>" + MATRIX[t].map(function (r, i) {
+        var hit = !a.pending && a.tier === t && a.si === i;
+        return '<td class="' + r + (hit ? " hit" : "") + '">' + r + "</td>";
+      }).join("") + "</tr>";
+    }).join("");
+    return '<table class="matrix" aria-label="Residual risk matrix, tier by control strength">' + head + rows + "</table>";
+  }
+
+  function renderAll() { renderSummary(); renderRegister(); renderFile(); }
+
+  // ---------- Events ----------
+  document.getElementById("regBody").addEventListener("click", function (e) {
+    var tr = e.target.closest("tr.row"); if (!tr) return;
+    selected = tr.getAttribute("data-id"); renderAll();
+    document.getElementById("file").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+  document.getElementById("regBody").addEventListener("keydown", function (e) {
+    if ((e.key === "Enter" || e.key === " ") && e.target.matches("tr.row")) { e.preventDefault(); e.target.click(); }
+  });
+  var file = document.getElementById("file");
+  file.addEventListener("click", function (e) {
+    var tab = e.target.closest(".tab");
+    if (tab) { activeTab = tab.getAttribute("data-tab"); renderFile(); var t = document.getElementById("tab-" + activeTab); if (t) t.focus(); return; }
+    if (e.target.id === "delVendor") {
+      var v = find(selected);
+      openModal("Delete " + v.name + "?", "Type the vendor ID (" + v.id + ") below and press Delete to remove it from the register.", "", "delete");
+    }
+  });
+  file.addEventListener("change", function (e) {
+    var v = find(selected); if (!v) return;
+    var t = e.target;
+    if (t.dataset.crit) { v.crit[t.dataset.crit] = Number(t.value); }
+    else if (t.dataset.q) { v.answers[t.dataset.q] = Number(t.value); }
+    else if (t.dataset.flag != null) { v.flags[Number(t.dataset.flag)] = t.checked; }
+    else if (t.id === "fOverride") { v.override = t.checked; }
+    else if (t.id === "fStatus") { v.status = t.value; }
+    else if (t.id === "fNext") { v.next = t.value; }
+    else if (t.id === "fName") { v.name = t.value || v.name; }
+    else if (t.id === "fService") { v.service = t.value; }
+    else if (t.id === "fOwner") { v.owner = t.value; }
+    else return;
+    save();
+    var y = window.scrollY;
+    renderAll();
+    window.scrollTo(0, y);
+    if (t.id) { var again = document.getElementById(t.id); if (again) again.focus({ preventScroll: true }); }
+  });
+
+  document.getElementById("addVendor").addEventListener("click", function () {
+    var n = state.vendors.reduce(function (m, v) { var k = parseInt(String(v.id).replace(/\D/g, ""), 10); return isNaN(k) ? m : Math.max(m, k); }, 0) + 1;
+    var id = "V" + (n < 10 ? "0" + n : n);
+    var d = new Date(); d.setMonth(d.getMonth() + 1);
+    state.vendors.push({ id: id, name: "New vendor", service: "Describe the service", owner: "Business owner", crit: { data: 0, vol: 0, crit: 0, access: 0, reg: 0 }, override: false, answers: {}, flags: [false, false, false, false], status: "Under assessment", next: d.toISOString().slice(0, 7) });
+    selected = id; activeTab = "tiering"; save(); renderAll();
+    document.getElementById("file").scrollIntoView({ behavior: "smooth", block: "start" });
+    var nm = document.getElementById("fName"); if (nm) { nm.focus({ preventScroll: true }); nm.select(); }
+  });
+  document.getElementById("resetData").addEventListener("click", function () {
+    openModal("Reset to sample data?", "This replaces everything on the register with the 10 Suvidha sample vendors. Press Reset to continue.", "", "reset");
+  });
+  document.getElementById("exportCsv").addEventListener("click", function () {
+    var head = ["ID", "Vendor", "Service", "Owner", "Inherent score", "Tier", "Control score", "Strength", "Residual risk", "Red flags", "Status", "Next review"];
+    var lines = [head.join(",")].concat(state.vendors.map(function (v) {
+      var a = assess(v);
+      return [v.id, v.name, v.service, v.owner, a.inherent, a.tier, a.score == null ? "" : a.score, a.strength || "", a.residual, a.flagsOn, v.status, v.next || ""]
+        .map(function (x) { var s = String(x); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }).join(",");
+    }));
+    openModal("Export register (CSV)", "Copy this into Excel or Google Sheets. One row per vendor.", lines.join("\n"), "view");
+  });
+  document.getElementById("backupJson").addEventListener("click", function () {
+    openModal("Backup or restore", "Copy this text to keep a backup. To restore, paste a backup here and press Restore.", JSON.stringify(state, null, 1), "restore");
+  });
+
+  // ---------- Modal ----------
+  var modal = document.getElementById("modal"), mode = "view", lastFocus = null;
+  function openModal(title, note, text, m) {
+    mode = m; lastFocus = document.activeElement;
+    document.getElementById("modalTitle").textContent = title;
+    document.getElementById("modalNote").textContent = note;
+    var ta = document.getElementById("modalText");
+    ta.value = text; ta.hidden = (m === "reset");
+    var r = document.getElementById("modalRestore");
+    r.hidden = !(m === "restore" || m === "reset" || m === "delete");
+    r.textContent = m === "reset" ? "Reset" : m === "delete" ? "Delete" : "Restore from this text";
+    r.className = (m === "reset" || m === "delete") ? "danger" : "";
+    document.getElementById("modalCopy").hidden = (m === "reset" || m === "delete");
+    document.getElementById("modalDownload").hidden = (m === "reset" || m === "delete");
+    if (m === "delete") { ta.hidden = false; ta.style.minHeight = "44px"; } else { ta.style.minHeight = ""; }
+    modal.hidden = false;
+    (m === "reset" ? document.getElementById("modalRestore") : ta).focus();
+  }
+  function closeModal() { modal.hidden = true; if (lastFocus) lastFocus.focus(); }
+  document.getElementById("modalClose").addEventListener("click", closeModal);
+  modal.addEventListener("click", function (e) { if (e.target === modal) closeModal(); });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !modal.hidden) closeModal(); });
+  document.getElementById("modalCopy").addEventListener("click", function () {
+    var ta = document.getElementById("modalText");
+    var done = function () { toast("Copied"); };
+    try {
+      navigator.clipboard.writeText(ta.value).then(done, function () { ta.select(); toast("Select all and copy manually"); });
+    } catch (err) { ta.select(); toast("Select all and copy manually"); }
+  });
+  document.getElementById("modalDownload").addEventListener("click", function () {
+    var ta = document.getElementById("modalText");
+    var isCsv = mode === "view";
+    var name = isCsv ? "vendor-register.csv" : "vendor-risk-backup.json";
+    try {
+      var blob = new Blob([ta.value], { type: isCsv ? "text/csv" : "application/json" });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url; a.download = name; document.body.appendChild(a); a.click();
+      setTimeout(function () { URL.revokeObjectURL(url); a.remove(); }, 500);
+      toast("Downloading " + name + " (if nothing happens, use Copy)");
+    } catch (err) { toast("Download is blocked here; use Copy"); }
+  });
+  document.getElementById("modalRestore").addEventListener("click", function () {
+    var ta = document.getElementById("modalText");
+    if (mode === "reset") { state = { vendors: sample() }; selected = state.vendors[2].id; activeTab = "result"; save(); renderAll(); closeModal(); toast("Sample data restored"); return; }
+    if (mode === "delete") {
+      var v = find(selected);
+      if (ta.value.trim() !== v.id) { toast("Type " + v.id + " to confirm"); return; }
+      state.vendors = state.vendors.filter(function (x) { return x.id !== v.id; });
+      selected = state.vendors.length ? state.vendors[0].id : null; save(); renderAll(); closeModal(); toast("Vendor deleted"); return;
+    }
+    try {
+      var s = JSON.parse(ta.value);
+      if (!s || !Array.isArray(s.vendors)) throw new Error("bad");
+      s.vendors.forEach(function (v) { v.answers = v.answers || {}; v.flags = v.flags || [false, false, false, false]; v.crit = v.crit || { data: 0, vol: 0, crit: 0, access: 0, reg: 0 }; });
+      state = s; selected = state.vendors.length ? state.vendors[0].id : null; save(); renderAll(); closeModal(); toast("Backup restored");
+    } catch (err) { toast("That text is not a valid backup"); }
+  });
+
+  // expose scoring for checks
+  window.__vrd = { assess: assess, sample: sample };
+  renderAll();
+})();
+</script>
+</body>
+</html>
