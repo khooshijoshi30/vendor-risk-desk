@@ -90,6 +90,7 @@ Part of a series built for the same fictional company:
 
 - [Personal Data Breach Response Playbook & Tabletop Kit](https://github.com/khooshijoshi30/dpdp-breach-response-playbook)
 - [ROPA & DPIA: AI Credit Scoring at an Indian NBFC](https://github.com/khooshijoshi30/dpdp-ropa-dpia-assessment)
+- [GRC Dashboard: risk register and ISO 27001:2022 compliance tracking (Flask)](https://github.com/khooshijoshi30/grc-dashboard)
 
 ---
 
